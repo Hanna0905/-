@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>九宮格作業簿與書法練習帖產生器（可匯出圖檔）</title>
+  <!-- Google Fonts: 繁體中文思源宋體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <!-- JSZip (支援一鍵打包全部頁面為 ZIP 檔) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 頂部導航列 -->
+  <header class="top-navbar">
+    <div class="brand">
+      <div class="brand-icon">書</div>
+      <div class="brand-title">九宮格書法與生字作業簿產生器</div>
+      <span class="brand-tag">花蓮縣書法網 功能升級版 · 支援高解析度圖檔匯出</span>
+    </div>
+
+    <!-- 核心匯出操作工具列 (使用者需求：要可以匯出圖檔) -->
+    <div class="nav-actions">
+      <button class="btn btn-secondary btn-sm" id="copyImageBtn" title="複製目前頁面圖片至剪貼簿，可直接在LINE/Word貼上">
+        📋 複製圖檔
+      </button>
+      <button class="btn btn-primary" id="exportPngBtn" title="下載當前頁面高解析度 PNG 圖檔">
+        🖼️ 匯出 PNG 圖檔
+      </button>
+      <button class="btn btn-secondary" id="exportJpgBtn" title="下載當前頁面 JPG 圖檔">
+        🖼️ 匯出 JPG
+      </button>
+      <button class="btn btn-success" id="exportZipBtn" title="若有多頁，將全部頁面打包為 ZIP 壓縮檔下載">
+        📦 打包全部圖檔 (ZIP)
+      </button>
+      <button class="btn btn-dark" id="printPdfBtn" title="以高畫質列印或另存為 PDF 檔案">
+        🖨️ 列印 / PDF
+      </button>
+    </div>
+  </header>
+
+  <!-- 主工作區 -->
+  <div class="main-layout">
+    <!-- 左側控制設定面板 -->
+    <aside class="sidebar">
+      <div class="sidebar-content">
+
+        <!-- 模式切換卡片 -->
+        <div class="control-card">
+          <div class="card-title">📖 練習本類型選擇</div>
+          <div class="mode-toggle-group">
+            <label class="mode-radio-label">
+              <input type="radio" name="appMode" value="calligraphy" checked>
+              🖌️ 書法大字練習簿
+            </label>
+            <label class="mode-radio-label">
+              <input type="radio" name="appMode" value="grid">
+              📝 生字九宮格作業簿
+            </label>
+          </div>
+        </div>
+
+        <!-- 文字輸入與範本卡片 -->
+        <div class="control-card">
+          <div class="card-title">✍️ 內容文字與範本</div>
+          <div class="form-row">
+            <label class="form-label" for="presetSelect">快速範本：</label>
+            <select id="presetSelect" class="form-control" style="width: 270px;"></select>
+          </div>
+          <div style="margin: 8px 0;">
+            <textarea id="textInput" class="form-control" placeholder="請在此輸入要練習的文字...">月落烏啼霜滿天，江楓漁火對愁眠。姑蘇城外寒山寺，夜半鐘聲到客船。</textarea>
+          </div>
+          <div class="form-row">
+            <span id="charCountDisplay" style="color: var(--ink-500); font-size: 12.5px;">字數：0 字</span>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" id="ignorePunctuation" class="control-input" checked> 忽略標點符號
+              </label>
+              <button id="clearTextBtn" class="btn btn-secondary btn-sm">清空</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 書法練習簿專屬排版面板 -->
+        <div class="control-card" id="calSettingsPanel">
+          <div class="card-title">📐 書法簿版面配置</div>
+          <div class="form-row">
+            <span class="form-label">經典格式：</span>
+            <div class="chip-row" style="margin-top: 0;">
+              <span class="preset-chip cal-layout-btn" data-cols="2" data-rows="3">2×3 (6字·經典款)</span>
+              <span class="preset-chip cal-layout-btn" data-cols="2" data-rows="4">2×4 (8字)</span>
+              <span class="preset-chip cal-layout-btn" data-cols="2" data-rows="2">2×2 (4字)</span>
+              <span class="preset-chip cal-layout-btn" data-cols="1" data-rows="4">1×4 (條幅)</span>
+              <span class="preset-chip cal-layout-btn" data-cols="3" data-rows="4">3×4 (12字)</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">欄列設定：</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span>欄數：</span>
+              <input type="number" id="calCols" class="control-input" value="2" min="1" max="5" style="width: 55px;">
+              <span>列數：</span>
+              <input type="number" id="calRows" class="control-input" value="3" min="1" max="8" style="width: 55px;">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">排列順序：</label>
+            <select id="calDirection" class="form-control control-input" style="width: 170px;">
+              <option value="rtl" selected>由右向左直排 (傳統)</option>
+              <option value="ltr">由左向右直排</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">側邊導引欄：</label>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="showSidebar" class="control-input" checked> 顯示全文、注音與頁碼
+            </label>
+          </div>
+        </div>
+
+        <!-- 生字作業簿專屬排版面板 -->
+        <div class="control-card" id="gridSettingsPanel" style="display: none;">
+          <div class="card-title">📐 作業簿格子排版</div>
+          <div class="form-row">
+            <span class="form-label">常用規格：</span>
+            <div class="chip-row" style="margin-top: 0;">
+              <span class="preset-chip grid-layout-btn" data-cols="6" data-rows="10">6×10 (60格)</span>
+              <span class="preset-chip grid-layout-btn" data-cols="5" data-rows="7">5×7 (35格)</span>
+              <span class="preset-chip grid-layout-btn" data-cols="7" data-rows="12">7×12 (84格)</span>
+              <span class="preset-chip grid-layout-btn" data-cols="8" data-rows="12">8×12 (96格)</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">欄列格數：</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span>每行：</span>
+              <input type="number" id="gridCols" class="control-input" value="6" min="2" max="15" style="width: 55px;">
+              <span>格數：</span>
+              <input type="number" id="gridRows" class="control-input" value="10" min="2" max="20" style="width: 55px;">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">練習模式：</label>
+            <select id="gridFillMode" class="form-control control-input" style="width: 190px;">
+              <option value="flow" selected>全文連續填滿 (抄經/詩詞)</option>
+              <option value="sample_practice">生字臨摹 (範例+描紅+空格)</option>
+              <option value="row_practice">每字一行 (首格示範後練習)</option>
+            </select>
+          </div>
+          <div id="practiceSettings" style="display: none;">
+            <div class="form-row">
+              <label class="form-label">每個字練習格數：</label>
+              <input type="number" id="repeatCount" class="control-input" value="5" min="2" max="12" style="width: 70px;">
+            </div>
+            <div class="form-row">
+              <label class="form-label">輔助描字樣式：</label>
+              <select id="traceStyle" class="form-control control-input" style="width: 140px;">
+                <option value="hollow" selected>雙鉤空心字</option>
+                <option value="tracing">描紅淡灰字</option>
+                <option value="dotted">虛線字</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">書寫走向：</label>
+            <select id="direction" class="form-control control-input" style="width: 170px;">
+              <option value="rtl" selected>直排（由右至左）</option>
+              <option value="ltr">直排（由左至右）</option>
+              <option value="horizontal">橫排（由左至右）</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">作業簿頁首：</label>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="showHeader" class="control-input" checked> 顯示學校/姓名/評語欄
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="form-label">作業簿標題：</label>
+            <input type="text" id="headerTitle" class="control-input" value="書法與國字練習作業簿" style="width: 190px;">
+          </div>
+          <div class="form-row">
+            <label class="form-label">頁尾頁碼：</label>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="showPageNumber" class="control-input" checked> 顯示頁碼
+            </label>
+          </div>
+        </div>
+
+        <!-- 格線樣式與色彩卡片 -->
+        <div class="control-card">
+          <div class="card-title">🔲 格線種類與樣式</div>
+          <div class="form-row">
+            <label class="form-label">格線種類：</label>
+            <select id="gridType" class="form-control control-input" style="width: 180px;">
+              <option value="new_nine" selected>新九宮格 (林岳瑩標準)</option>
+              <option value="tian">田字格 (十字虛線)</option>
+              <option value="mi">米字格 (八方輔助線)</option>
+              <option value="jing">井字格 (傳統等分九宮格)</option>
+              <option value="hui">回字格 (內外同心方格)</option>
+              <option value="blank">空白方格 (無輔助線)</option>
+            </select>
+          </div>
+          <div id="newNineOptions">
+            <div class="form-row">
+              <label class="form-label">新九宮格比例：</label>
+              <select id="newNineRatio" class="form-control control-input" style="width: 180px;">
+                <option value="standard" selected>標準均等 (1 : 1 : 1)</option>
+                <option value="golden">中宮收緊 (3 : 4 : 3 專利比例)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">輔助十字線：</label>
+              <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" id="newNineCross" class="control-input"> 疊加中心十字線
+              </label>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">格線顏色：</label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="color" id="gridColor" class="control-input" value="#c82423" style="width: 42px; height: 30px; padding: 1px; cursor: pointer;">
+              <div class="chip-row" style="margin-top: 0;">
+                <span class="color-chip" data-target="gridColor" data-color="#c82423" style="background: #c82423;" title="硃砂紅"></span>
+                <span class="color-chip" data-target="gridColor" data-color="#222222" style="background: #222222;" title="玄墨黑"></span>
+                <span class="color-chip" data-target="gridColor" data-color="#1b5e20" style="background: #1b5e20;" title="翠竹綠"></span>
+                <span class="color-chip" data-target="gridColor" data-color="#0d47a1" style="background: #0d47a1;" title="青花藍"></span>
+                <span class="color-chip" data-target="gridColor" data-color="#666666" style="background: #666666;" title="鉛灰色"></span>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">外框粗細：</label>
+            <div class="range-container">
+              <input type="range" id="borderWidth" class="control-input" min="1" max="4" step="0.5" value="2">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">內輔助線樣式：</label>
+            <select id="innerLineStyle" class="form-control control-input" style="width: 140px;">
+              <option value="dashed" selected>虛線 (破折號)</option>
+              <option value="dotted">點狀虛線</option>
+              <option value="solid">細實線</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">內線濃度：</label>
+            <div class="range-container">
+              <input type="range" id="innerOpacity" class="control-input" min="0.2" max="1" step="0.05" value="0.65">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">內線粗度：</label>
+            <div class="range-container">
+              <input type="range" id="innerLineWidth" class="control-input" min="0.5" max="2.5" step="0.25" value="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- 字型與字體呈現卡片 -->
+        <div class="control-card">
+          <div class="card-title">🖌️ 字體樣式與描字設定</div>
+          <div class="form-row">
+            <label class="form-label">字型：</label>
+            <select id="fontFamily" class="form-control control-input" style="width: 220px;">
+              <option value='"DFKai-SB", "BiauKai", "KaiTi", "cwTeXKai", "Noto Serif TC", serif' selected>標楷體 (台灣標準書法楷體)</option>
+              <option value='"Noto Serif TC", "Source Han Serif TC", serif'>思源宋體 / 明體</option>
+              <option value='"PingFang TC", "Microsoft JhengHei", sans-serif'>微軟正黑體 (硬筆楷意)</option>
+              <option value='"KaiTi", "STKaiti", serif'>系統楷體 (KaiTi)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">自訂字型檔案：</label>
+            <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+              📂 載入本機字型 (.ttf/.otf)
+              <input type="file" id="fontUploadInput" accept=".ttf,.otf,.woff,.woff2" style="display: none;">
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="form-label">文字樣式：</label>
+            <select id="charStyle" class="form-control control-input" style="width: 170px;">
+              <option value="solid" selected>實心黑字 (臨摹示範)</option>
+              <option value="hollow">雙鉤空心字 (外框描字)</option>
+              <option value="tracing">描紅淡灰字 (浮水印描寫)</option>
+              <option value="dotted">虛線描邊字 (結構指引)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">字體大小比例：</label>
+            <div class="range-container">
+              <input type="range" id="fontSizeRatio" class="control-input" min="65" max="115" step="1" value="86">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">文字實心顏色：</label>
+            <input type="color" id="textColor" class="control-input" value="#111111" style="width: 42px; height: 30px; padding: 1px;">
+          </div>
+          <div class="form-row">
+            <label class="form-label">空心框線顏色：</label>
+            <input type="color" id="hollowColor" class="control-input" value="#222222" style="width: 42px; height: 30px; padding: 1px;">
+          </div>
+          <div class="form-row">
+            <label class="form-label">描紅淡灰顏色：</label>
+            <input type="color" id="traceColor" class="control-input" value="#c0c0c0" style="width: 42px; height: 30px; padding: 1px;">
+          </div>
+        </div>
+
+        <!-- 版面方向與匯出規格 -->
+        <div class="control-card">
+          <div class="card-title">⚙️ 紙張方向與圖檔規格</div>
+          <div class="form-row">
+            <label class="form-label">紙張方向：</label>
+            <select id="orientation" class="form-control control-input" style="width: 150px;">
+              <option value="portrait" selected>A4 直向 (直印)</option>
+              <option value="landscape">A4 橫向 (橫印)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">匯出圖檔解析度：</label>
+            <select id="exportDpi" class="form-control control-input" style="width: 190px;">
+              <option value="2" selected>高畫質 (2100×2970 推薦)</option>
+              <option value="3">300 DPI 超高清印刷 (3150×4455)</option>
+              <option value="1">標準網頁 (1050×1485)</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- 右側預覽畫布視口 -->
+    <main class="preview-section">
+      <!-- 預覽工具列 (翻頁與縮放) -->
+      <div class="preview-toolbar">
+        <div class="toolbar-group pagination-controls">
+          <button class="btn btn-secondary btn-sm" id="firstPageBtn" title="第一頁">⏮</button>
+          <button class="btn btn-secondary btn-sm" id="prevPageBtn" title="上一頁">◀ 上一頁</button>
+          <span class="page-indicator" id="pageIndicator">1 / 1</span>
+          <button class="btn btn-secondary btn-sm" id="nextPageBtn" title="下一頁">下一頁 ▶</button>
+          <button class="btn btn-secondary btn-sm" id="lastPageBtn" title="最後一頁">⏭</button>
+        </div>
+
+        <div class="toolbar-group zoom-controls">
+          <button class="btn btn-secondary btn-sm" id="zoomOutBtn" title="縮小">🔍 -</button>
+          <span class="zoom-level" id="zoomLevelDisplay">100%</span>
+          <button class="btn btn-secondary btn-sm" id="zoomInBtn" title="放大">🔍 +</button>
+          <button class="btn btn-secondary btn-sm" id="zoomResetBtn" title="100% 重設">1:1</button>
+          <button class="btn btn-secondary btn-sm" id="fitScreenBtn" title="適應視窗寬度">↔ 適應視窗</button>
+        </div>
+      </div>
+
+      <!-- 畫布滾動視口 -->
+      <div class="canvas-viewport" id="previewContainer">
+        <div class="canvas-wrapper">
+          <canvas id="previewCanvas"></canvas>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 邏輯腳本載入 -->
+  <script src="presets.js"></script>
+  <script src="renderer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
